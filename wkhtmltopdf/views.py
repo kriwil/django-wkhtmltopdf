@@ -43,7 +43,7 @@ class PDFTemplateResponse(TemplateResponse, PDFResponse):
     def __init__(self, request, template, context=None, mimetype=None,
                  status=None, content_type=None, current_app=None,
                  filename=None, header_template=None, footer_template=None,
-                 cmd_options=None, override_settings=None,
+                 toc_template=None, cmd_options=None, override_settings=None,
                  *args, **kwargs):
 
         super(PDFTemplateResponse, self).__init__(request=request,
@@ -58,6 +58,7 @@ class PDFTemplateResponse(TemplateResponse, PDFResponse):
 
         self.header_template = header_template
         self.footer_template = footer_template
+        self.toc_template = toc_template
 
         if cmd_options is None:
             cmd_options = {}
@@ -84,7 +85,7 @@ class PDFTemplateResponse(TemplateResponse, PDFResponse):
                                       suffix=suffix, prefix=prefix,
                                       dir=dir, delete=delete)
         try:
-            tempfile.write(content)
+            tempfile.write(content.encode('utf-8'))
             tempfile.flush()
             return tempfile
         except:
@@ -93,7 +94,8 @@ class PDFTemplateResponse(TemplateResponse, PDFResponse):
             raise
 
     def convert_to_pdf(self, filename,
-                       header_filename=None, footer_filename=None):
+                       header_filename=None, footer_filename=None,
+                       toc_filename=None):
         cmd_options = self.cmd_options.copy()
         # Clobber header_html and footer_html only if filenames are
         # provided. These keys may be in self.cmd_options as hardcoded
@@ -102,6 +104,12 @@ class PDFTemplateResponse(TemplateResponse, PDFResponse):
             cmd_options['header_html'] = header_filename
         if footer_filename is not None:
             cmd_options['footer_html'] = footer_filename
+
+        if toc_filename is not None:
+            cmd_options['toc'] = {
+                'xsl-style-sheet': toc_filename,
+            }
+
         return wkhtmltopdf(pages=[filename], **cmd_options)
 
     @property
@@ -115,8 +123,8 @@ class PDFTemplateResponse(TemplateResponse, PDFResponse):
         """
         debug = getattr(settings, 'WKHTMLTOPDF_DEBUG', settings.DEBUG)
 
-        input_file = header_file = footer_file = None
-        header_filename = footer_filename = None
+        input_file = header_file = footer_file = toc_file = None
+        header_filename = footer_filename = toc_filename = None
 
         try:
             input_file = self.render_to_temporary_file(
@@ -141,12 +149,22 @@ class PDFTemplateResponse(TemplateResponse, PDFResponse):
                 )
                 footer_filename = footer_file.name
 
+            if self.toc_template:
+                print self.toc_template
+                toc_file = self.render_to_temporary_file(
+                    template_name=self.toc_template,
+                    prefix='wkhtmltopdf', suffix='.html',
+                    delete=(not debug)
+                )
+                toc_filename = toc_file.name
+
             return self.convert_to_pdf(filename=input_file.name,
                                        header_filename=header_filename,
-                                       footer_filename=footer_filename)
+                                       footer_filename=footer_filename,
+                                       toc_filename=toc_filename)
         finally:
             # Clean up temporary files
-            for f in filter(None, (input_file, header_file, footer_file)):
+            for f in filter(None, (input_file, header_file, footer_file, toc_file)):
                 f.close()
 
     def get_override_settings(self):
@@ -185,6 +203,7 @@ class PDFTemplateView(TemplateView):
     template_name = None
     header_template = None
     footer_template = None
+    toc_template = None
 
     # TemplateResponse classes for PDF and HTML
     response_class = PDFTemplateResponse
@@ -240,6 +259,7 @@ class PDFTemplateView(TemplateView):
                 context=context, filename=filename,
                 header_template=self.header_template,
                 footer_template=self.footer_template,
+                toc_template=self.toc_template,
                 cmd_options=cmd_options, override_settings=override_settings,
                 **response_kwargs
             )

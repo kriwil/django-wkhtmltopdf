@@ -76,8 +76,18 @@ def wkhtmltopdf(pages, output=None, **kwargs):
         env = dict(os.environ, **env)
 
     cmd = getattr(settings, 'WKHTMLTOPDF_CMD', 'wkhtmltopdf')
+
+    toc = options.pop('toc', None)
+    options_to_args = _options_to_args(**options)
+    if toc is not None:
+        options_to_args.append('toc')
+
+        for key, value in toc.items():
+            options_to_args.append("--{}".format(key))
+            options_to_args.append(value)
+
     args = list(chain([cmd],
-                      _options_to_args(**options),
+                      options_to_args,
                       list(pages),
                       [output]))
     return check_output(args, stderr=sys.stderr, env=env)
