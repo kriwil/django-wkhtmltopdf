@@ -150,7 +150,6 @@ class PDFTemplateResponse(TemplateResponse, PDFResponse):
                 footer_filename = footer_file.name
 
             if self.toc_template:
-                print self.toc_template
                 toc_file = self.render_to_temporary_file(
                     template_name=self.toc_template,
                     prefix='wkhtmltopdf', suffix='.html',
